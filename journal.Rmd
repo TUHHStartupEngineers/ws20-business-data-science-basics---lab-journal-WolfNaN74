@@ -9,46 +9,200 @@ output:
     collapsed: false
     number_sections: true
     toc_depth: 3
-    #code_folding: hide
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 ```
 
-**IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing. Just added some random words to see that it changes...
 
-This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header.
-
-# My first post
+# Challenge Chapter 2 - "Introduction to the Tidyverse"
 
 Last compiled: `r Sys.Date()`
 
-Notice that whatever you define as a top level header, automatically gets put into the table of contents bar on the left. 
+This chapter deals with basic data import, wrangling and manipulation and here
+are shown some plots of bike sales data.
 
-## Second level header
+## Reading the Data
 
-You can add more headers by adding more hashtags. These won't be put into the table of contents
-
-### third level header
-
-Here's an even lower level header
-
-# My second post (note the order)
-
-Last compiled: `r Sys.Date()`
-
-I'm writing this tutorial going from the top down. And, this is how it will be printed. So, notice the second post is second in the list. If you want your most recent post to be at the top, then make a new post starting at the top. If you want the oldest first, do, then keep adding to the bottom
-
-# Adding R stuff
-
-So far this is just a blog where you can write in plain text and serve your writing to a webpage. One of the main purposes of this lab journal is to record your progress learning R. The reason I am asking you to use this process is because you can both make a website, and a lab journal, and learn R all in R-studio. This makes everything really convenient and in the same place. 
-
-So, let's say you are learning how to make a histogram in R. For example, maybe you want to sample 100 numbers from a normal distribution with mean = 0, and standard deviation = 1, and then you want to plot a histogram. You can do this right here by using an r code block, like this:
-
+First of all the data was read:
 ```{r}
-samples <- rnorm(100, mean=0, sd=1)
-hist(samples)
+library(readxl)
+bike_orderlines_wrangled_tbl <- read_excel(path="project_stuff/bike_orderlines.xlsx")
 ```
 
-When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
+After that some wrangling was done. The whole code is not included here because
+the business case code was not changed besides adding a bit of code to seperate 
+city and state in the location column:
+```{r eval=FALSE}
+  # 5.1.2 Seperate location
+  separate(col = location,
+           into = c("city", "state"),
+           sep = ", ") %>%
+```
+
+## Sales by Location (state)
+
+In this part the plot and code for showing the sales by location (state) are
+shown.
+
+### Manipulations
+
+Fist of all the data was manipulated to be able to plot the sales by location
+and derive the state with the highest revenue. To do this the select(), mutate(), 
+group_by(), summarise() and ungroup() functions where used as can be seen in 
+the code snippet below.
+
+```{r}
+# 6.3 Sales by location (state) with bar plot
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+sales_by_loc_tbl <- bike_orderlines_wrangled_tbl %>%
+
+  # Select the columns
+  select(order_date, category_1, total_price, state, city, lat, lng) %>%
+  # Change time data
+  mutate(year = year(order_date)) %>%
+
+  # Group by State and Year
+  group_by(state) %>%
+  # Summarise
+  summarise(sales = sum(total_price)) %>%
+  ungroup() %>%
+
+  # Format $ Text
+  mutate(sales_text = scales::dollar(sales, big.mark = ".",
+                                     decimal.mark = ",",
+                                     prefix = "",
+                                     suffix = " €"))
+
+# which state sells the most of the bikes?
+```
+
+### Plotting/Visualisation
+
+In the following figure the sales by location are visualized and it can be seen,
+that in North-Rhine-Westphalia the most bikes were sold.
+One reason might be that there are around 16. mio people living there; way more 
+than in any other german state. Another might be that the people there are just 
+nicer and ride their bikes more often... not as much car industry as, let´s say 
+in Baden-Württemberg.
+
+A comparison of sales per persons will not be done here.
+
+```{r fig.width=12, fig.height=8}
+# Step 2 - Visualize
+
+# sales_by_loc_tbl
+sales_by_loc_tbl %>%
+  # Create a basic plot
+  ggplot(aes(x=state, y=sales)) +
+
+  # Geometries
+  geom_col(fill = "#AABBCC") +
+  geom_label(aes(label = sales_text)) +
+  geom_smooth(method = "lm", se = F) +
+
+  # Formating
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".",
+                                                    decimal.mark = ",",
+                                                    prefix = "",
+                                                    suffix = " €")) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1), text = element_text(size=18)) +
+  labs(
+  title    = "Revenue by year",
+  subtitle = "Upward Trend",
+  x = "", # Override defaults for x and y
+  y = "Revenue"
+)
+```
+
+## Sales by Location and Year
+
+Last compiled: `r Sys.Date()`
+
+The plot shows all 12 german states that the company Canon has bikes-stores in and 
+the sales in each of these states in the years 2015-2019.
+
+The overall revenue of canon sales has risen over the shown years, but there 
+are some setbacks to be seen in some of the states.
+
+```{r plot, fig.width=14, fig.height=8}
+# 6.4 Sales by state + year with bar plot ----
+sales_by_loc_year_tbl <- bike_orderlines_wrangled_tbl %>%
+
+  # Select the columns
+  select(order_date, category_1, total_price, state, city, lat, lng) %>%
+  # Change time data
+  mutate(year = year(order_date)) %>%
+
+  # Group by State and Year
+  group_by(state, year) %>%
+  # Summarise
+  summarise(sales = sum(total_price)) %>%
+  ungroup() %>%
+
+  # Format $ Text
+  mutate(sales_text = scales::dollar(sales, big.mark = ".",
+                                     decimal.mark = ",",
+                                     prefix = "",
+                                     suffix = " €"))
+
+# Step 2 - Visualize
+
+sales_by_loc_year_tbl %>%
+
+  # Set up x, y, fill
+  ggplot(aes(x = year, y = sales, fill = state)) +
+
+  # Geometries
+  geom_col() + # Run up to here to get a stacked bar plot
+
+  # Facet
+  facet_wrap(~ state) +
+
+  # Formatting
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".",
+                                                    decimal.mark = ",",
+                                                    prefix = "",
+                                                    suffix = " €")) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1),
+        axis.text.y = element_text(size=14),
+        axis.title  = element_text(size=16),
+        text        = element_text(size=12),
+        plot.title  = element_text(size=24),
+        legend.text = element_text(size=14),
+        legend.title= element_text(size=16)) +
+  labs(
+    title = "Revenue by State and Year",
+    subtitle = "Overall Revenue is Growing whereas some States are showing losses",
+    fill = "States", # Changes the legend name
+    x = "",
+    y = "Revenue"
+  )
+```
+
+# Challenge Chapter 3 - "Data Acquisition"
+
+## API
+
+## Web Scraping "rosebikes"
+
+# Challenge Chapter 4 - "Data Wrangling"
+
+## Patent Dominance
+
+## Recent Patent Activity
+
+## Innovation in Tech
+
+# Challenge Chapter 5 - "Data Visulaization"
+
+## Time Course of the Cumulative Covid-19 Cases
+
+## Distribution of the Mortality Rate
+
+# Plotting the second thing...
+
