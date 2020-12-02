@@ -192,17 +192,299 @@ sales_by_loc_year_tbl %>%
 
 # Challenge Chapter 4 - "Data Wrangling"
 
+In this chapter data from PatentsView (a United States Patent and Trademkar Office) is taken an analysed.
+The whole task is done with the data.table package.
+
+## Initial Setup
+
+Before the data can be analysed it has to be loaded, unpacked and 
+transformed into a data.table. This is done here for the needed zip data packages
+
+### Loading Necessary Libraries
+
+```{r}
+library(vroom)
+library(data.table)
+library(tidyverse)
+library(lubridate)
+```
+
+### Importing the Data from ZIP-Files
+
+Data of the following packages is loaded:
+
+1. assignee
+```{r eval=FALSE}
+# 1.1 Loading assignee ----
+col_types <- list(
+  id =           col_character(),
+  type =         col_double(),
+  name_first =   col_skip(),  #! don't need it for the analysis
+  name_last =    col_skip(),  #!
+  organization = col_character()
+)
+
+assignee_tbl <- vroom(
+  file       = unz("00_data/patents/assignee.tsv.zip",
+                   "assignee.tsv"),
+  delim      = "\t",
+  col_types  = col_types,
+  na         = c("", "NA", "NULL", " ", "na", "N/A")
+)
+```
+2. patent_assignee
+```{r eval=FALSE}
+# 1.2 Loading patent_assignee ----
+col_types <- list(
+  patent_id =   col_character(),
+  assignee_id = col_character(),
+  location_id = col_skip()  #!
+)
+
+patent_assignee_tbl <- vroom(
+  file       = unz("00_data/patents/patent_assignee.tsv.zip",
+                   "patent_assignee.tsv"),
+  delim      = "\t",
+  col_types  = col_types,
+  na         = c("", "NA", "NULL", " ", "na", "N/A")
+)
+```
+3. patent
+```{r eval=FALSE}
+# 1.3 Loading patent ----
+col_types <- list(
+  id =         col_character(),
+  type =       col_skip(),  #!
+  number =     col_skip(),  #!
+  country =    col_skip(),  #!
+  date =       col_date("%Y-%m-%d"),
+  abstract =   col_skip(),  #!
+  title =      col_skip(),  #!
+  kind =       col_skip(),  #!
+  num_claims = col_skip(),  #!
+  filename =   col_skip(),  #!
+  withdrawn =  col_skip()   #!
+)
+
+patent_tbl <- vroom(
+  file       = unz("00_data/patents/patent.tsv.zip",
+                   "patent.tsv"),
+  delim      = "\t",
+  col_types  = col_types,
+  na         = c("", "NA", "NULL", " ", "na", "N/A")
+)
+```
+4. uspc
+```{r eval=FALSE}
+col_types <- list(
+  uuid =         col_character(),
+  patent_id =    col_character(),
+  mainclass_id = col_character(),
+  subclass_id =  col_character(),
+  sequence =     col_double()
+)
+
+uspc_tbl <- vroom(
+  file       = unz("00_data/patents/uspc.tsv.zip", "uspc.tsv"),
+  delim      = "\t",
+  col_types  = col_types,
+  na         = c("", "NA", "NULL", " ", "na", "N/A")
+)
+```
+5. mainclass_current
+```{r eval=FALSE}
+col_types <- list(
+  id =     col_character(),
+  title =  col_character()
+)
+
+mainclass_tbl <- vroom(
+  file       = unz("00_data/patents/mainclass_current.tsv.zip",
+                   "mainclass_current.tsv"),
+  delim      = "\t",
+  col_types  = col_types,
+  na         = c("", "NA", "NULL", " ", "na", "N/A")
+)
+```
+
 ## Patent Dominance
+
+*Question:* What US company / corporation has the most patents? 
+
+*Task:* List the 10 US companies with the most assigned/granted patents.
+
+*Needed Tables:* assignee, patent_assingee
+
+First the tables are transformed into the data.table type, second the data tables are merged and then the data is analyzed.
+
+```{r eval= FALSE}
+# Checkin the Class
+class(assignee_tbl)
+
+# Creating the data.tables
+setDT(assignee_tbl)
+setDT(patent_assignee_tbl)
+
+# Merging the data.tables
+patent_domiance_data <- merge(x = patent_assignee_tbl,
+                              y = assignee_tbl,
+                              by.x  = "assignee_id",
+                              by.y  = "id",
+                              all.x = TRUE,
+                              all.y = FALSE)
+
+# Get Top 10 US-Companies/Corporations with most Patents
+patent_domiance_data[type == 2,
+                     .N,
+                     by = organization][order(-N)] %>%
+  head(.,10)
+```
+
+The following table shows the result of the analysis.
+The top 10 US-Companies/Corporations with the most patents granted/assgined.
+
+||Company/Corporation|Number of Patents|
+|-|--|---|
+|1|International Business Machines Corporation|139091|
+|2|General Electric Company|47121|
+|3|Intel Corporation|42156|
+|4|Hewlett-Packard Development Company, L.P.|35572|
+|5|Microsoft Corporation|30085|
+|6|Micron Technology, Inc. |28000|
+|7|QUALCOMM Incorporated |24702|
+|8|Texas Instruments Incorporated|24181|
+|9|Xerox Corporation|23173|
+|10|Apple Inc.|21820|
 
 ## Recent Patent Activity
 
+*Question:* What US company had the most patents granted in 2019? 
+
+*Task:* List the top 10 companies with the most new granted patents for 2019.
+
+*Needed Tables:* assignee, patent_assingee, patent
+
+The table patent is transformed into a data.table and then it is merged with the already merged table "patent_domiance_data" from the task before.
+Finally the question is answered.
+
+```{r eval= FALSE}
+# patent_tbl to data.table
+setDT(patent_tbl)
+
+# Merging the data.tables
+# take existing merged table "patent_domiance_data"
+recent_patent_activity_data <- merge(x = patent_domiance_data,
+                                     y = patent_tbl,
+                                     by.x  = "patent_id",
+                                     by.y  = "id",
+                                     all.x = TRUE,
+                                     all.y = FALSE)
+
+# Get Top 10 US-Organizations with most patents in 2019
+recent_patent_activity_data[type == 2 &
+                              year(ymd(date)) == "2019",
+                            .N,
+                            by = organization][order(-N)] %>%
+  head(.,10)
+```
+
+Resulting table:
+
+Top 10 US-Organizations with most patents in 2019:
+
+||Organization|Number of Patents|
+|-|-|-|
+|1|International Business Machines Corporation|9265|
+|2|Intel Corporation|3526|
+|3|Microsoft Technology Licensing, LLC|3106|
+|4|Apple Inc.|2817|
+|5|Ford Global Technologies, LLC|2624|
+|6|Amazon Technologies, Inc.|2533|
+|7|QUALCOMM Incorporated|2359|
+|8|Google Inc.|2290|
+|9|General Electric Company|1860|
+|10|Hewlett-Packard Development Company, L.P.|1589|
+
 ## Innovation in Tech
+
+*Question:* What is the most innovative tech sector?
+
+*Task:* For the top 10 companies (worldwide) with the most patents, what are the top 5 USPTO tech main classes?
+
+*Needed Tables:* assignee, patent_assingee, uspc, (mainclass_current)
+
+The table uspc is transformed into a data.table and then it is merged with the already merged table "patent_domiance_data" from the task patent dominance.
+Then the top ten organizations and the top 5 classes are searched. Additionally the name of the class is added with the mainclass_current data.
+
+```{r eval= FALSE}
+# uspc_tbl to data.table
+setDT(uspc_tbl)
+
+# Merging the data.tables
+# take existing merged table "patent_domiance_data"
+patent_innovation_data <- merge(x = patent_domiance_data,
+                                y = uspc_tbl,
+                                by    = "patent_id",
+                                all.x = TRUE,
+                                all.y = FALSE)
+
+# Top 10 worldwide
+most_patents_world <- patent_innovation_data[
+    !is.na(organization),
+    .N,
+    by = organization]
+  [order(-N)] %>%
+  head(.,10)
+
+# <Output
+# > most_patents_world
+# organization      N
+# 1: International Business Machines Corporation 345118
+# 2:               Samsung Electronics Co., Ltd. 204838
+# 3:                      Canon Kabushiki Kaisha 187338
+# 4:                    General Electric Company 145473
+# 5:                               Hitachi, Ltd. 140677
+# 6:                    Kabushiki Kaisha Toshiba 139423
+# 7:                            Sony Corporation 138638
+# 8:                             Fujitsu Limited 103374
+# 9:                           Intel Corporation  98653
+# 10:    Matsushita Electric Industrial Co., Ltd.  98038
+# Output>
+
+# Main classes of the top 10
+top_5_main_classes <- patent_innovation_data[
+  !is.na(mainclass_id) &
+    organization %in% most_patents_world$organization,
+  .N,
+  by = mainclass_id
+  ][order(-N)] %>%
+  head(.,5)
+
+# Output:
+# $ mainclass_id <chr> "257", "438", "365", "370", "358"
+# $ N            <int> 93632, 53918, 40176, 35577, 34880
+# Output:
+
+
+# mainclass_tbl to data.table
+setDT(mainclass_tbl)
+
+# mainclass names
+mainclass_tbl[id %in% top_5_main_classes$mainclass_id]
+```
+
+Table of results: Top 5 Main Patent Categories World Wide:
+
+||id|Title|Number|
+|-|---|----------------------|-----|
+|1|257|ACTIVE SOLID-STATE DEVICES (E.G., TRANSISTORS, SOLID-STATE DIODES)|93632|
+|2|358|FACSIMILE AND STATIC PRESENTATION PROCESSING|53918|
+|3|365|STATIC INFORMATION STORAGE AND RETRIEVAL|40176|
+|4|370|MULTIPLEX COMMUNICATIONS|35577|
+|5|438|SEMICONDUCTOR DEVICE MANUFACTURING: PROCESS|34880|
 
 # Challenge Chapter 5 - "Data Visulaization"
 
 ## Time Course of the Cumulative Covid-19 Cases
 
 ## Distribution of the Mortality Rate
-
-# Plotting the second thing...
-
