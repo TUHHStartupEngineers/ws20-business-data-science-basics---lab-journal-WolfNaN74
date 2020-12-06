@@ -18,6 +18,8 @@ knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 
 The complete scripts can be found in the folder project_stuff in github.
 
+*I would be very happy to get some annotations or comments where I could have done something with less steps or maybe without using as much ram space. E.g. just a hint for a function. I think especially in the data wrangling parts things can be done way more effective. Thanks in advance.*
+
 # Challenge Chapter 2 - "Introduction to the Tidyverse"
 
 Last compiled: `r Sys.Date()`
@@ -446,11 +448,11 @@ bike_mdl_vers_price_tbl <- purrr::map(mdl_url_list, get_bike_vrsn_and_price) %>%
   bind_rows() %>%
   as_tibble() %>%
   select(!position) %>%
-  rowid_to_column(var = "position")
-
-# Final Data Table:
+  rowid_to_column(var = "position") %>%
+  mutate(price = price %>% str_remove(pattern = ",.*$")) %>% 
+  mutate(price = price %>%  str_remove(pattern = "\\.")) %>% 
+  mutate(price = as.numeric(price))
 bike_mdl_vers_price_tbl
-
 ```
 
 # Challenge Chapter 4 - "Data Wrangling"
@@ -780,7 +782,6 @@ cum_covid_cases <- covid_data_tbl %>%
   select(dateRep, cases, countriesAndTerritories) %>%
 
   # Filter Countries
-  # # filter(countriesAndTerritories == "France") %>%
   filter(countriesAndTerritories %in% 
            c("France",
              "Germany",
@@ -794,14 +795,38 @@ cum_covid_cases <- covid_data_tbl %>%
 
   mutate(cum_cases = cumsum(cases)) %>%
   ungroup()
-  
+
+# Cum cases Europe:
+cum_covid_cases_europe <- covid_data_tbl %>%
+
+  select(dateRep, cases, continentExp, countriesAndTerritories) %>%
+  filter(continentExp == "Europe") %>%
+  mutate(date = dmy(dateRep)) %>%
+  filter(year(date) == "2020") %>%
+  arrange(date) %>%
+  group_by(countriesAndTerritories) %>%
+  mutate(cum_cases_country = cumsum(cases)) %>%
+  ungroup() %>%
+
+  group_by(date) %>%
+  mutate(cum_cases = sum(cum_cases_country)) %>%
+  # # mutate(cum_cases = cumsum(cases)) %>%
+  ungroup() %>%
+  filter(countriesAndTerritories == "Germany") %>%
+  mutate(countriesAndTerritories = "Europe") %>%
+  select(!continentExp) %>% select(!cum_cases_country)
+
+# Creating new to have europe cases as well!
+cum_cas_all <- bind_rows(cum_covid_cases,cum_covid_cases_europe) %>%
+  arrange(date)
+
 ```
 
 Plotting:
 ```{r fig.width= 10, fig.height=6}
 
 # Data Visualization
-cum_covid_cases %>%
+cum_cas_all %>%
 
   # Canvas
   ggplot(aes(x=date, y = cum_cases),
@@ -812,7 +837,8 @@ cum_covid_cases %>%
 
   # Get Months as x axis (%B for full name, more info: strftime())
   scale_x_date(date_breaks = "1 month",
-               date_labels = "%b") +
+               date_labels = "%b",
+               limits = c(as.Date("2020/01/01"), Sys.Date()-2)) +
 
   scale_y_continuous(n.breaks = 8,
                      labels = unit_format(unit = "Mio.", scale = 1e-6)) +
@@ -821,11 +847,12 @@ cum_covid_cases %>%
                                  "green",
                                  "purple",
                                  "black",
-                                 "red")) +
+                                 "red",
+                                 "cyan")) +
 
   labs(
     title = "Confirmed cummulative COVID-19 Cases",
-    subtitle = "Cases are still rising dramatically!",
+    subtitle = "Europe overtook the USA but keep in mind that Russia is counted to Europe in this data set.",
     x = "Year 2020",
     y = "Cumulative Cases",
     color = "Country",

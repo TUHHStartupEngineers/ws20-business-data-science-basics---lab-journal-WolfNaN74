@@ -22,7 +22,6 @@ cum_covid_cases <- covid_data_tbl %>%
   select(dateRep, cases, countriesAndTerritories) %>%
 
   # Filter Countries
-  # # filter(countriesAndTerritories == "France") %>%
   filter(countriesAndTerritories %in% c("France",
                                         "Germany",
                                         "United_Kingdom",
@@ -38,9 +37,35 @@ cum_covid_cases <- covid_data_tbl %>%
 
   glimpse()
 
+# Cum cases Europe:
+cum_covid_cases_europe <- covid_data_tbl %>%
+  
+  select(dateRep, cases, continentExp, countriesAndTerritories) %>%
+  filter(continentExp == "Europe") %>%
+  mutate(date = dmy(dateRep)) %>%
+  filter(year(date) == "2020") %>%
+  arrange(date) %>%
+  group_by(countriesAndTerritories) %>%
+  mutate(cum_cases_country = cumsum(cases)) %>%
+  ungroup() %>%
+  
+  group_by(date) %>%
+  mutate(cum_cases = sum(cum_cases_country)) %>%
+  # # mutate(cum_cases = cumsum(cases)) %>%
+  ungroup() %>%
+  filter(countriesAndTerritories == "Germany") %>%
+  mutate(countriesAndTerritories = "Europe") %>%
+  select(!continentExp) %>% select(!cum_cases_country) %>%
+  glimpse()
+
+# Creating new to have europe cases as well!
+cum_cas_all <- bind_rows(cum_covid_cases,cum_covid_cases_europe) %>%
+  arrange(date)
+
+
 
 # Data Visualization
-cum_covid_cases %>%
+cum_cas_all %>%
 
   # Canvas
   ggplot(aes(x=date, y = cum_cases), color = countriesAndTerritories) +
@@ -48,11 +73,13 @@ cum_covid_cases %>%
   geom_line(aes(color = countriesAndTerritories), size=1, linetype = 1) +
 
   # Get Months as x axis (%B for full name, more info: strftime())
-  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  scale_x_date(date_breaks = "1 month",
+               date_labels = "%b",
+               limits = c(as.Date("2020/01/01"), Sys.Date()-1)) +
 
   scale_y_continuous(n.breaks = 8, labels = unit_format(unit = "Mio.", scale = 1e-6)) +
 
-  scale_colour_manual(values = c("blue", "green", "purple", "black", "red")) +
+  scale_colour_manual(values = c("blue", "green", "purple", "black", "red", "cyan")) +
 
   labs(
     title = "Confirmed cummulative COVID-19 Cases",
@@ -60,7 +87,7 @@ cum_covid_cases %>%
     x = "Year 2020",
     y = "Cumulative Cases",
     color = "Country",
-    caption = "Is that a continually growing function or what?"
+    caption = "Europe overtook the USA but keep in mind that Russia is counted to Europe in this data set."
   ) +
 
   theme_bw() +

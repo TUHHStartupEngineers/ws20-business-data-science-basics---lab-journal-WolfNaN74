@@ -134,12 +134,14 @@ mdl_url_list <- bike_mdl_tbl %>%
   as.character()
 
 # 4.3.2 Map the vers and price function against all model URLs
-bike_mdl_vers_price_tbl <- map(mdl_url_list, get_bike_vrsn_and_price) %>%
+bike_mdl_vers_price_tbl <- purrr::map(mdl_url_list, get_bike_vrsn_and_price) %>%
   bind_rows() %>%
   as_tibble() %>%
   select(!position) %>%
-  rowid_to_column(var = "position")
-
-# Final Data Table:
+  rowid_to_column(var = "position") %>%
+  mutate(price = price %>% str_remove(pattern = ",.*$")) %>% 
+  mutate(price = price %>%  str_remove(pattern = "\\.")) %>% 
+  mutate(price = as.numeric(price))
 bike_mdl_vers_price_tbl
+
 
