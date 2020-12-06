@@ -18,7 +18,7 @@ knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 
 The complete scripts can be found in the folder project_stuff in github.
 
-*I would be very happy to get some annotations or comments where I could have done something with less steps or maybe without using as much ram space. E.g. just a hint for a function. I think especially in the data wrangling parts things can be done way more effective. Thanks in advance.*
+**I would be very happy to get some annotations or comments where I could have done something with less steps or maybe without using as much ram space. E.g. just a hint for a function. I think especially in the data wrangling parts things can be done way more effective. Thanks in advance.**
 
 # Challenge Chapter 2 - "Introduction to the Tidyverse"
 
@@ -576,11 +576,11 @@ mainclass_tbl <- vroom(
 
 ## Patent Dominance
 
-*Question:* What US company / corporation has the most patents? 
+**Question:** What US company / corporation has the most patents? 
 
-*Task:* List the 10 US companies with the most assigned/granted patents.
+**Task:** List the 10 US companies with the most assigned/granted patents.
 
-*Needed Tables:* assignee, patent_assingee
+**Needed Tables:** assignee, patent_assingee
 
 First the tables are transformed into the data.table type, second the data tables are merged and then the data is analyzed.
 
@@ -625,11 +625,11 @@ The top 10 US-Companies/Corporations with the most patents granted/assgined.
 
 ## Recent Patent Activity
 
-*Question:* What US company had the most patents granted in 2019? 
+**Question:** What US company had the most patents granted in 2019? 
 
-*Task:* List the top 10 companies with the most new granted patents for 2019.
+**Task:** List the top 10 companies with the most new granted patents for 2019.
 
-*Needed Tables:* assignee, patent_assingee, patent
+**Needed Tables:** assignee, patent_assingee, patent
 
 The table patent is transformed into a data.table and then it is merged with the already merged table "patent_domiance_data" from the task before.
 Finally the question is answered.
@@ -674,11 +674,11 @@ Top 10 US-Organizations with most patents in 2019:
 
 ## Innovation in Tech
 
-*Question:* What is the most innovative tech sector?
+**Question:** What is the most innovative tech sector?
 
-*Task:* For the top 10 companies (worldwide) with the most patents, what are the top 5 USPTO tech main classes?
+**Task:** For the top 10 companies (worldwide) with the most patents, what are the top 5 USPTO tech main classes?
 
-*Needed Tables:* assignee, patent_assingee, uspc, (mainclass_current)
+**Needed Tables:** assignee, patent_assingee, uspc, (mainclass_current)
 
 The table uspc is transformed into a data.table and then it is merged with the already merged table "patent_domiance_data" from the task patent dominance.
 Then the top ten organizations and the top 5 classes are searched. Additionally the name of the class is added with the mainclass_current data.
@@ -771,7 +771,7 @@ covid_data_tbl <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribu
 
 ## Time Course of the Cumulative Covid-19 Cases
 
-*Goal:* Map the time course of the cumulative Covid-19 cases!
+**Goal:** Map the time course of the cumulative Covid-19 cases!
 
 Data Wrangling:
 
@@ -871,7 +871,7 @@ cum_cas_all %>%
 
 ## Distribution of the Mortality Rate
 
-*Goal:* Visualize the distribution of the mortality rate (deaths / population) with geom_map().
+**Goal:** Visualize the distribution of the mortality rate (deaths / population) with geom_map().
 
 Same as above: fist some data wrangling and after that the map plot.
 
