@@ -16,6 +16,7 @@ output:
 knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 ```
 
+The complete scripts can be found in the folder project_stuff in github.
 
 # Challenge Chapter 2 - "Introduction to the Tidyverse"
 
@@ -186,11 +187,275 @@ sales_by_loc_year_tbl %>%
 
 # Challenge Chapter 3 - "Data Acquisition"
 
+Last compiled: `r Sys.Date()`
+
 ## API
+
+I chose the Guaridan API to get some articles. There are various options to get articles by tags, names, year, keywords etc. 
+Here is a simple example how to get articles that deal with Hydrogen. Look and see the magic happening:
+Well, won't work live here, since I don't know how to hide my api-key in the kniting of the code to have it working live from the website. (Since you are also allowed to integrate the API on your own Website for users...) but code and output will be displayed here.
+
+```{r eval=FALSE}
+# 1.0 Loading Libraries ----
+library(httr)
+library(jsonlite)
+library(tidyverse)
+library(dplyr)
+
+# 2.0 Creating the query ----
+
+# 2.1 Base URL ----
+cont_endpoint_url = "https://content.guardianapis.com/search"
+
+# 2.2 Search Item
+
+search_item <- "Hydrogen"  # Some User Input should be used here
+page_size <- '20'  # possible form 1-50
+ordering <- "newest"  # possilbe: newest, oldest, relevance
+
+# 3.0 Connecting to the API ----
+
+# Creation of the access link
+resp <- GET(cont_endpoint_url, query = list(
+            q = search_item,
+            "order-by" = ordering,
+            format = 'json',
+            "page-size" = page_size,
+            "api-key" = Sys.getenv('guard_api_key')))
+
+# 3.1 Check if the Status is okay, else fire a warning ----
+http_status <- http_status(resp)
+http_status$message
+warn_for_status(resp)
+stop_for_status(resp)
+
+# 4.0 Convert the API Content ----
+
+# 4.1 Check encoding ----
+stringi::stri_enc_detect(content(resp, "raw"))
+
+# 4.2 Convert to nice and tidy JSON ----
+json_resp <- resp %>%
+  .$content %>%
+  rawToChar() %>%
+  fromJSON()
+
+# 4.3 Derive the Data ----
+
+# Info about the whole data Set avilable on the server
+my_info <- tibble(totalFindings = json_resp$response$total,
+                  pageSize = json_resp$response$pageSize,
+                  currentPage = json_resp$response$currentPage,
+                  numberPages = json_resp$response$pages,
+                  order = json_resp$response$orderBy)
+
+# Display of the output for the query we did:
+# > my_info
+# # A tibble: 1 x 5
+#   totalFindings pageSize currentPage numberPages order 
+#           <int>    <int>       <int>       <int> <chr> 
+# 1         22199       20           1        1110 newest
+
+my_data <- tibble(webTitle = json_resp$response$results$webTitle,
+                  webUrl = json_resp$response$results$webUrl,
+                  webPublicationDate = json_resp$response$results$webPublicationDate,
+                  section = json_resp$response$results$sectionName)
+
+# Since we only get the first page, with a chosen page size and order of newest... here are the newest 20 articles with hydrogen and car
+my_data <- tibble(webTitle = json_resp$response$results$webTitle,
+                  webUrl = json_resp$response$results$webUrl,
+                  webPublicationDate = json_resp$response$results$webPublicationDate,
+                  section = json_resp$response$results$sectionName)
+```
+
+The output of the search for the newest 5 articles with hydrogen was as follows (search date: 05.12.2020):
+
+| webTitle | webUrl | webPublicationDate | section |
+|------------------------|--|--|--|
+| UK vows to outdo other economies with 68% emissions cuts by 2030                                | https://www.theguardian.com/environment/2020/dec/03/uk-vows-outdo-other-major-economies-emissions-cuts-by-2030                                                      | 2020-12-04T08:53:42Z | Environment    |
+| Climate change: what is the UK's NDC and why is it important?                                   | https://www.theguardian.com/environment/2020/dec/03/climate-change-what-is-the-uks-ndc-and-why-is-it-important                                                      | 2020-12-03T22:30:40Z | Environment    |
+| Scott Morrison says Australia will attend climate ambition summit to 'correct mistruths'         | https://www.theguardian.com/australia-news/2020/dec/03/scott-morrison-says-australia-will-attend-climate-ambition-summit-to-correct-mistruths                       | 2020-12-03T09:01:45Z | Australia news |
+| Morrison explains how vaccine will be rolled out as NSW reports one new case â€“ as it happened | https://www.theguardian.com/australia-news/live/2020/dec/03/australia-politics-live-coronavirus-vaccine-covid-morrison-coalition-labor-nsw-victoria-qld-latest-news | 2020-12-03T08:01:51Z | Australia news |
+| Norman Foster pulls out of climate coalition in row over aviation                               | https://www.theguardian.com/artanddesign/2020/dec/02/norman-foster-pulls-out-of-climate-coalition-in-row-over-aviation                                              | 2020-12-02T16:49:33Z | Art and design |
+
+You might want to specify your search a bit further for example in the first article the word hydrogen is mentioned only once ...
+Another problem is that we have some issue with the data decryption as can be seen with the title of item 4 where the â€“ looks a bit out of place. Thats true: it´s supposed to be a hypen ("-"). We run into the same issue with "`". 
+But well, we still have some data that we can work with and do further analysis with.
+
 
 ## Web Scraping "rosebikes"
 
+In this chapter we will do some web scraping and collect some data about bikes from the website "www.rosebikes.de".
+
+At first the websites HTML Code and structure was analysed and with the information of that static website a data table was created, containing numerous bikes, their versions, prices and the faimly they belong to. A lot more data could be collected by just adding a few lines here and there to the existing program structure, since we have a link to every bike (here excluded are the main categories/families: e-bike, kinder and sale since thouse are eighter repeatings (sale) or the subsites have a little bit different structure).
+
+Well let´s get started by loading the libraries. With the help of the rvest libary we then connect to the webpage and collect the data step by step by first getting the model names and then the version numbers before we get the prices.
+Just go ahead, the script should be well commented.
+
+```{r}
+
+# Web Scaping rosebike.de
+
+# Goal: get model names, categories and prices of all the bikes
+
+# 1.0 LIBRARIES ----
+
+library(tidyverse) # Main Package - Loads dplyr, purrr, etc.
+library(rvest)     # HTML Hacking & Web Scraping
+library(jsonlite)  # converts JSON files to R objects
+library(glue)      # concatenate strings
+library(stringi)   # character string/text processing
+library(purrr)
+
+```
+
+Getting the Family Names:
+
+```{r}
+
+# 2.0 GET PRODUCT FAMILIES ----
+
+url_home <- "https://www.rosebikes.de/"
+# xopen(url_home)  # to open in the browser from R
+
+# Read the HTML of the home adress
+html_home         <- read_html(url_home)
+
+# maybe: ADD WARNING IF THE URL WAS NOT LOADED...
+
+# Web scrape the ids for the families
+bike_family_tbl <- html_home %>%
+  html_nodes(css = ".main-navigation-category-with-tiles__link") %>% # extract nodes
+  html_attr('href') %>% # get the urls
+  .[-6] %>% .[-(9:10)] %>%
+  # kick out e-bike, kinder and sale
+  # discard(.p = ~stringr::str_detect(.x,"/fahrräder/sale|/fahrräder/e-bike|/fahrräder/kinder")) %>% # get rid of sale
+  str_remove('/fahrräder/') %>%
+  enframe(name = "position", value = "family_name") %>% # Convert vector to tibble
+  mutate(url = str_glue("https://www.rosebikes.de/fahrräder/{family_name}")) # Create url
+
+bike_family_tbl
+
+```
+
+Getting the Model Names:
+
+```{r}
+# 3.0 GET BIKE MODELS ----
+# We have: bike_family_tbl
+
+# 3.1 BIKE MODELS FUNCTION ----
+
+get_bike_mdl <- function(url){
+  fam_url <- url
+  html_bike_family <- read_html(url)
+
+  # Getting Bike Model Names
+  bike_model_name <- html_bike_family %>%
+    html_nodes(css = ".catalog-category-bikes__title-text") %>%
+    html_text() %>%
+    str_extract(pattern = "(?<=\\n).*(?=\\n)") %>%
+    enframe(name = "position", value = "bikeName")
+
+  # Getting Bike Model URLs
+  bike_model_url <- html_bike_family %>%
+    html_nodes(css = ".catalog-category-bikes__button") %>%
+    html_attr('href') %>%
+    enframe(name = "position", value = "url") %>%
+    mutate(url = glue("https://www.rosebikes.de{url}")) %>%
+    mutate(bike_family = str_extract(fam_url, pattern = "(?<=/)[a-z]*$"))
+
+  # Join Model Names and URLs
+  bike_models_tbl <- left_join(bike_model_name, bike_model_url)
+}
+
+# 3.2 TRY BIKE SUBCATEGORIES FUNCTION ----
+# test_url_subcat <- bike_family_tbl$url[1]
+# bike_subcat_tbl <- get_bike_mdl(url = test_url_subcat)
+
+# 3.3 RUN BIKE MODELS FUNCTION ON ALL URLS ----
+# 3.3.1 Extract all family URLs
+family_url_list <- bike_family_tbl %>%
+  pull(url) %>%
+  as.character()
+
+# 3.3.2 Map the model function against all family URLs
+bike_mdl_tbl <- purrr::map(family_url_list, get_bike_mdl) %>%
+  # Stack all lists together
+  bind_rows() %>%
+  # Convert to tibble
+  as_tibble() %>%
+  # Kick out position from above
+  select(!position) %>%
+  # Create new pos to have a number count
+  rowid_to_column(var = "position")
+
+bike_mdl_tbl
+```
+
+Getting the Versions and Prices for all the models and join all the data to one final table:
+
+```{r}
+
+# 4.0 GET BIKE VERSIONS AND PRICES ----
+# We have: bike_family_tbl, bike_mdl_tbl
+
+# 4.1 BIKE VERSIONS AND PRICES FUNCTION ----
+get_bike_vrsn_and_price <- function(url){
+
+  html_bike_mdl <- read_html(url)
+
+  # Bike Model
+  bike_mdl <- html_bike_mdl %>%
+    html_nodes(css = '.catalog-category-title-with-logo__title-text') %>%
+    html_text() %>%
+    str_extract(pattern = "(?<=\\n).*(?=\\n)")
+
+  # Getting Versions
+  bike_vrsn_tbl <- html_bike_mdl %>%
+    html_nodes(css = '.catalog-category-model__title') %>%
+    html_text() %>%
+    str_extract(pattern = "(?<=\\n).*(?=\\n)") %>%
+    enframe(name = "position", value = "version") %>%
+    mutate(model = bike_mdl) %>% 
+    mutate(family = str_extract(url, pattern = "(?<=fahrräder/)[a-z]*"))
+
+  # Getting the price of Versions
+  bike_vrsn_price_tbl <- html_bike_mdl %>%
+    html_nodes(css = '.product-tile-price__current-value.catalog-category-model__price-current-value') %>%
+    html_text() %>%
+    str_extract(pattern = "(?<=\\n).*(?=\\n)") %>%
+    enframe(name = "position", value = "price")
+
+  # Join Version and Price
+  left_join(bike_vrsn_tbl , bike_vrsn_price_tbl)
+}
+
+# 4.2 TRY BIKE VERSIONS AND PRICES FUNCTION ----
+# test_url_vrsn <- bike_mdl_tbl$url[1]
+# bike_vrsn_tbl <- get_bike_vrsn_and_price(url = test_url_vrsn)
+
+# 4.3 RUN BIKE VERSIONS AND PRICES FUNCTION ON ALL MODEL URLs ----
+# 4.3.1 Extract all model urls
+mdl_url_list <- bike_mdl_tbl %>%
+  pull(url) %>%
+  as.character()
+
+# 4.3.2 Map the vers and price function against all model URLs
+bike_mdl_vers_price_tbl <- purrr::map(mdl_url_list, get_bike_vrsn_and_price) %>%
+  bind_rows() %>%
+  as_tibble() %>%
+  select(!position) %>%
+  rowid_to_column(var = "position")
+
+# Final Data Table:
+bike_mdl_vers_price_tbl
+
+```
+
 # Challenge Chapter 4 - "Data Wrangling"
+
+Last compiled: `r Sys.Date()`
 
 In this chapter data from PatentsView (a United States Patent and Trademkar Office) is taken an analysed.
 The whole task is done with the data.table package.
@@ -485,6 +750,174 @@ Table of results: Top 5 Main Patent Categories World Wide:
 
 # Challenge Chapter 5 - "Data Visulaization"
 
+Last compiled: `r Sys.Date()`
+
+Here some Covid-19 data will be plotted.
+
+First the libraies are loaded, then the data is downloaded:
+
+```{r}
+# Libraries
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(maps)
+
+# Data Import
+covid_data_tbl <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv")
+```
+
 ## Time Course of the Cumulative Covid-19 Cases
 
+*Goal:* Map the time course of the cumulative Covid-19 cases!
+
+Data Wrangling:
+
+```{r}
+cum_covid_cases <- covid_data_tbl %>%
+
+  # Select needed cols:
+  select(dateRep, cases, countriesAndTerritories) %>%
+
+  # Filter Countries
+  # # filter(countriesAndTerritories == "France") %>%
+  filter(countriesAndTerritories %in% 
+           c("France",
+             "Germany",
+             "United_Kingdom",
+             "Spain",
+             "United_States_of_America")) %>%
+  mutate(date = dmy(dateRep)) %>%
+  filter(year(date) == "2020") %>%
+  group_by(countriesAndTerritories) %>%
+  arrange(date) %>%
+
+  mutate(cum_cases = cumsum(cases)) %>%
+  ungroup()
+  
+```
+
+Plotting:
+```{r fig.width= 10, fig.height=6}
+
+# Data Visualization
+cum_covid_cases %>%
+
+  # Canvas
+  ggplot(aes(x=date, y = cum_cases),
+         color = countriesAndTerritories) +
+
+  geom_line(aes(color = countriesAndTerritories),
+            size=1, linetype = 1) +
+
+  # Get Months as x axis (%B for full name, more info: strftime())
+  scale_x_date(date_breaks = "1 month",
+               date_labels = "%b") +
+
+  scale_y_continuous(n.breaks = 8,
+                     labels = unit_format(unit = "Mio.", scale = 1e-6)) +
+
+  scale_colour_manual(values = c("blue",
+                                 "green",
+                                 "purple",
+                                 "black",
+                                 "red")) +
+
+  labs(
+    title = "Confirmed cummulative COVID-19 Cases",
+    subtitle = "Cases are still rising dramatically!",
+    x = "Year 2020",
+    y = "Cumulative Cases",
+    color = "Country",
+    caption = str_glue("As of: {max(cum_covid_cases$date)}")
+  ) +
+
+  theme_bw() +
+
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold"),
+        plot.caption = element_text(face = "bold.italic"),
+        axis.text.x = element_text(angle=45, vjust=0.6))
+
+```
+
+
 ## Distribution of the Mortality Rate
+
+*Goal:* Visualize the distribution of the mortality rate (deaths / population) with geom_map().
+
+Same as above: fist some data wrangling and after that the map plot.
+
+```{r fig.width= 10, fig.height=9}
+# Data Manipulation:
+world <- map_data("world")
+
+cum_covid_deaths <- covid_data_tbl %>%
+
+  # Select needed cols:
+  select(deaths, countriesAndTerritories,popData2019) %>%
+
+  mutate(across(countriesAndTerritories, str_replace_all, "_", " ")) %>%
+  mutate(countriesAndTerritories = case_when(
+    countriesAndTerritories == "United Kingdom" ~ "UK",
+    countriesAndTerritories == "United States of America" ~ "USA",
+    countriesAndTerritories == "Czechia" ~ "Czech Republic",
+    TRUE ~ countriesAndTerritories
+  )) %>%
+  group_by(countriesAndTerritories) %>%
+  summarise(sum_deaths = sum(deaths), pop_2019 = mean(popData2019)) %>%
+  mutate(deaths_per_pop = sum_deaths/pop_2019) %>%
+  ungroup() %>%
+
+  left_join(world, ., by = c("region" = "countriesAndTerritories")) %>%
+
+  select(!subregion)
+
+
+# Plotting
+x <- ggplot(data = cum_covid_deaths) +
+  
+  geom_map(map = world,
+           aes(x = long, y = lat,
+               map_id = region,
+               fill = deaths_per_pop)) +
+  
+  # scale_fill_continuous(labels = scales::percent) +
+  scale_x_continuous(breaks = c(-150,-100,-50,0,50,100,150),
+                     limits = c(-180, 180)) +
+  
+  scale_y_continuous(breaks = c(-90,-60,-30,0,30,60,90),
+                     limits = c(-90, 90)) +
+  
+  scale_fill_viridis_c(direction = -1,
+                       n.breaks = 8,
+                       labels = scales::percent,
+                       option = "B",
+                       alpha = 1,
+                       begin = 0.2,
+                       end = 0.6,
+                       na.value = "grey",
+                       guide = "colourbar", # "coloursteps"
+                       aesthetics = c("colour", "fill")) +
+  
+  expand_limits(x = cum_covid_deaths$long,
+                y = cum_covid_deaths$lat) +
+  
+  labs(
+    title = "Confirmed cummulative COVID-19 Deaths Relative to the size of the population",
+    subtitle = "Looking grim for Americas and Europe",
+    x = "Longitude",
+    y = "Latitude",
+    fill = "Mortality Rate",
+    color = "Country",
+    caption = str_glue("As of: {max(cum_covid_cases$date)}")) +
+  
+  theme_minimal() +
+  
+  theme(plot.title = element_text(face = "bold",color = "blue"),
+        axis.title.x = element_text(face = "italic"),
+        axis.title.y = element_text(face = "italic"),
+        plot.caption = element_text(face = "bold.italic"))
+
+x
+```
